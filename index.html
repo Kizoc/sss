@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>全协议节点重命名与上传工具（帅比｜高速｜国家）</title>
+  <style>
+    /* 重置和全局 */
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #fff;
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h2 {
+      font-weight: 700;
+      font-size: 2.2rem;
+      text-align: center;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 8px rgba(0,0,0,0.4);
+    }
+    p {
+      font-size: 1rem;
+      margin-bottom: 15px;
+      text-align: center;
+      max-width: 700px;
+      line-height: 1.4;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+    }
+    input[type="text"], select, textarea {
+      width: 100%;
+      max-width: 800px;
+      border-radius: 12px;
+      border: none;
+      padding: 12px 15px;
+      font-family: 'Consolas', monospace;
+      font-size: 1rem;
+      box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+      background: #2b2b50;
+      color: #e0e0e0;
+      margin-bottom: 15px;
+      resize: vertical;
+      transition: box-shadow 0.3s ease;
+    }
+    input[type="text"]:focus, select:focus, textarea:focus {
+      outline: none;
+      box-shadow: 0 8px 25px #8a8aff;
+      background: #36365a;
+    }
+    .button-group {
+      margin-top: 5px;
+      margin-bottom: 25px;
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    button {
+      background: linear-gradient(45deg, #ff7e5f, #feb47b);
+      border: none;
+      color: #fff;
+      font-weight: 600;
+      padding: 12px 30px;
+      font-size: 1rem;
+      border-radius: 25px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(255, 126, 95, 0.5);
+      transition: all 0.3s ease;
+      user-select: none;
+      min-width: 140px;
+    }
+    button:hover {
+      background: linear-gradient(45deg, #feb47b, #ff7e5f);
+      box-shadow: 0 6px 25px rgba(254, 180, 123, 0.8);
+      transform: translateY(-3px);
+    }
+    .output-container {
+      max-width: 820px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 15px 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      color: #f0f0f0;
+      font-family: 'Consolas', monospace;
+      min-height: 150px;
+      white-space: pre-wrap;
+      user-select: text;
+      overflow-wrap: break-word;
+      margin-bottom: 20px;
+    }
+    label {
+      max-width: 800px;
+      width: 100%;
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: block;
+    }
+    @media (max-width: 600px) {
+      textarea {
+        height: 180px;
+      }
+      button {
+        min-width: 100%;
+      }
+      .button-group {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h2>全协议节点重命名与上传工具</h2>
+  <p>支持 vmess://、vless://、ss://、trojan://、ssr:// 等协议<br>备注格式：帅比｜高速｜国家（国家自动识别）</p>
+
+  <!-- 步骤1：输入订阅链接或内容 -->
+  <label for="subUrl">步骤 1：输入订阅链接或纯文本订阅内容（会自动Base64解码）</label>
+  <input type="text" id="subUrl" placeholder="例如：https://example.com/sub 或直接粘贴订阅内容" />
+
+  <div class="button-group">
+    <button onclick="fetchSubscription()">解析订阅</button>
+  </div>
+
+  <!-- 步骤2：显示解码后的节点 -->
+  <label for="rawNodes">步骤 2：解析后的节点（可编辑）</label>
+  <textarea id="rawNodes" placeholder="解析后的节点列表" rows="8"></textarea>
+
+  <div class="button-group">
+    <button onclick="renameNodes()">开始重命名节点</button>
+  </div>
+
+  <!-- 步骤3：重命名后的节点 -->
+  <label for="renamedNodes">步骤 3：重命名后的节点</label>
+  <textarea id="renamedNodes" placeholder="重命名后的节点结果" rows="8" readonly></textarea>
+
+  <!-- 步骤4：GitHub Token -->
+  <label for="tokenInput">步骤 4：填写 GitHub Token（无需写https://github.com/token，只填Token字符串）</label>
+  <input type="text" id="tokenInput" placeholder="填写 GitHub Token" autocomplete="off" />
+
+  <!-- 步骤5：选择上传文件 -->
+  <label for="fileSelect">步骤 5：选择上传文件名</label>
+  <select id="fileSelect">
+    <!-- 选项由JS动态添加 -->
+  </select>
+
+  <div class="button-group">
+    <button onclick="uploadToGitHub()">上传到 GitHub</button>
+    <button onclick="copyOutput()">复制重命名结果</button>
+  </div>
+
+  <div id="uploadStatus" class="output-container" aria-live="polite" aria-atomic="true"></div>
+
+<script>
+  // 国家列表（全）
+  const allCountries = [
+    "中国","香港","澳门","台湾","美国","英国","日本","新加坡","韩国","德国","法国","澳大利亚","俄罗斯","加拿大","阿根廷","墨西哥",
+    "意大利","西班牙","瑞士","荷兰","瑞典","比利时","挪威","丹麦","芬兰","奥地利","爱尔兰","葡萄牙","乌克兰","白俄罗斯","波兰",
+    "匈牙利","捷克","斯洛伐克","罗马尼亚","保加利亚","希腊","土耳其","以色列","阿联酋","卡塔尔","沙特","伊朗","印度","巴基斯坦",
+    "越南","菲律宾","马来西亚","泰国","印尼","柬埔寨","老挝","缅甸","孟加拉","哈萨克斯坦","乌兹别克斯坦","斯里兰卡","尼泊尔",
+    "南非","尼日利亚","埃及","摩洛哥","阿尔及利亚","突尼斯","肯尼亚","坦桑尼亚","加纳","安哥拉","伊拉克","叙利亚","约旦",
+    "黎巴嫩","也门","阿富汗","新西兰","文莱","蒙古","塞尔维亚","克罗地亚","斯洛文尼亚","波黑","北马其顿","爱沙尼亚","拉脱维亚",
+    "立陶宛","冰岛","卢森堡","列支敦士登","马耳他","安道尔","圣马力诺","梵蒂冈","格鲁吉亚","亚美尼亚","阿塞拜疆","摩尔多瓦",
+    "古巴","巴西","智利","哥伦比亚","秘鲁","厄瓜多尔","乌拉圭","巴拉圭","玻利维亚","委内瑞拉","巴拿马","哥斯达黎加","洪都拉斯",
+    "尼加拉瓜","萨尔瓦多","多米尼加","牙买加","特立尼达和多巴哥","冰岛","南苏丹","苏丹","刚果","刚果（金）","乍得","利比亚",
+    "津巴布韦","赞比亚","博茨瓦纳","纳米比亚","马达加斯加","毛里求斯","马尔代夫","斐济","汤加","帕劳","密克罗尼西亚","马绍尔群岛"
+  ];
+
+  // 辅助提取国家
+  function extractCountry(text) {
+    for (const c of allCountries) {
+      if (text.includes(c)) return c;
+    }
+    return null;
+  }
+
+  // 格式化备注，顺序: 帅比｜高速｜国家（如果无国家则标记）
+  function formatRemark(country, order) {
+    if (country) {
+      return `帅比｜高速｜${country}`;
+    } else {
+      return `无法识别-${order}｜帅比｜高速`;
+    }
+  }
+
+  // 步骤1：根据输入订阅链接或纯文本获取内容并尝试Base64解码
+  async function fetchSubscription() {
+    const subUrl = document.getElementById('subUrl').value.trim();
+    const rawNodes = document.getElementById('rawNodes');
+    const renamedNodes = document.getElementById('renamedNodes');
+    const uploadStatus = document.getElementById('uploadStatus');
+
+    rawNodes.value = '';
+    renamedNodes.value = '';
+    uploadStatus.textContent = '';
+
+    if (!subUrl) {
+      alert('请输入订阅链接或订阅内容');
+      return;
+    }
+
+    let content = '';
+    if (/^https?:\/\//.test(subUrl)) {
+      rawNodes.value = '正在请求订阅链接，请稍候...';
+      try {
+        const res = await fetch(subUrl);
+        if (!res.ok) throw new Error(`请求失败：${res.status}`);
+        content = await res.text();
+      } catch (e) {
+        rawNodes.value = `请求失败：${e.message}`;
+        return;
+      }
+    } else {
+      content = subUrl;
+    }
+
+    // 尝试Base64解码
+    try {
+      const base64Str = content.trim();
+      const cleaned = base64Str.replace(/\s+/g, '');
+      const decoded = atob(cleaned);
+
+      if (/vmess:\/\//.test(decoded) || /ss:\/\//.test(decoded) || /vless:\/\//.test(decoded) || /trojan:\/\//.test(decoded) || /ssr:\/\//.test(decoded)) {
+        rawNodes.value = decoded;
+      } else {
+        rawNodes.value = content;
+      }
+    } catch {
+      rawNodes.value = content;
+    }
+  }
+
+  // 步骤2&3：重命名逻辑
+  function renameNodes() {
+    const input = document.getElementById("rawNodes").value.trim();
+    if (!input) {
+      alert('请先解析订阅并获得节点内容');
+      return;
+    }
+    const lines = input.split('\n').map(l => l.trim()).filter(l => l);
+    let count = 1;
+    const unknownNodes = [];
+    const knownNodes = [];
+
+    function addFormattedRemark(line, order, country) {
+      if (line.includes('#')) {
+        return line.replace(/#.*$/, '#' + encodeURIComponent(formatRemark(country, order)));
+      } else {
+        return line + '#' + encodeURIComponent(formatRemark(country, order));
+      }
+    }
+
+    for (const line of lines) {
+      if (line.startsWith('vmess://')) {
+        const renamed = renameVmess(line);
+        if (renamed.country) knownNodes.push(renamed.line);
+        else unknownNodes.push({line: renamed.line, order: count++});
+      } else if (line.startsWith('vless://') || line.startsWith('trojan://')) {
+        const renamed = renameUrlLine(line);
+        if (renamed.country) knownNodes.push(renamed.line);
+        else unknownNodes.push({line: renamed.line, order: count++});
+      } else if (line.startsWith('ss://') || line.startsWith('ssr://')) {
+        const renamed = renameUrlLine(line);
+        if (renamed.country) knownNodes.push(renamed.line);
+        else unknownNodes.push({line: renamed.line, order: count++});
+      } else {
+        unknownNodes.push({line: line + '#'+ encodeURIComponent(`无法识别-${count++}｜帅比｜高速`), order: count});
+      }
+    }
+
+    const finalKnown = knownNodes.map(l => {
+      const idx = l.indexOf('#');
+      let remark = "";
+      if (idx > -1) remark = decodeURIComponent(l.slice(idx + 1));
+      const country = extractCountry(remark);
+      return addFormattedRemark(l, 0, country);
+    });
+
+    const finalUnknown = unknownNodes.map(item => addFormattedRemark(item.line, item.order, null));
+    const finalLines = finalKnown.concat(finalUnknown);
+
+    document.getElementById("renamedNodes").value = finalLines.join('\n');
+  }
+
+  // 解析vmess节点，修改ps字段
+  function renameVmess(line) {
+    try {
+      const base64 = line.slice(8);
+      const jsonStr = atob(base64);
+      const obj = JSON.parse(jsonStr);
+      const country = extractCountry(obj.ps || "") || null;
+      obj.ps = country || obj.ps;
+      const newLine = 'vmess://' + btoa(JSON.stringify(obj));
+      return { line: newLine, country };
+    } catch {
+      return { line, country: null };
+    }
+  }
+
+  // 处理vless、trojan、ss、ssr这类带备注的URL格式
+  function renameUrlLine(line) {
+    try {
+      const protoMatch = line.match(/^(\w+):\/\//);
+      if (!protoMatch) return { line, country: null };
+      const proto = protoMatch[1];
+      const withoutProto = line.slice(proto.length + 3);
+
+      let mainPart = withoutProto;
+      let remark = "";
+      if (withoutProto.includes('#')) {
+        const idx = withoutProto.indexOf('#');
+        mainPart = withoutProto.slice(0, idx);
+        remark = decodeURIComponent(withoutProto.slice(idx + 1));
+      }
+
+      const country = extractCountry(remark) || null;
+      const newRemark = country || remark;
+
+      const encodedRemark = encodeURIComponent(newRemark);
+      return { line: proto + "://" + mainPart + (newRemark ? "#" + encodedRemark : ""), country };
+    } catch {
+      return { line, country: null };
+    }
+  }
+
+  // 步骤5：上传到GitHub
+  async function uploadToGitHub() {
+    const token = document.getElementById('tokenInput').value.trim();
+    const file = document.getElementById('fileSelect').value;
+    const renamedNodes = document.getElementById('renamedNodes').value.trim();
+    const status = document.getElementById('uploadStatus');
+
+    if (!token) {
+      status.textContent = '❌ 请填写 GitHub Token';
+      return;
+    }
+    if (!file) {
+      status.textContent = '❌ 请选择上传文件';
+      return;
+    }
+    if (!renamedNodes) {
+      status.textContent = '❌ 没有重命名后的节点内容';
+      return;
+    }
+
+    status.textContent = '正在上传，请稍候...';
+
+    const owner = 'Kizoc';
+    const repo = 'suv';
+    const path = file;
+    const content = btoa(unescape(encodeURIComponent(renamedNodes))); // 兼容多字节字符Base64编码
+
+    try {
+      // 先获取文件sha（如果存在）用于更新
+      const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+        headers: { 'Authorization': `token ${token}` }
+      });
+
+      let sha = null;
+      if (getRes.ok) {
+        const data = await getRes.json();
+        sha = data.sha;
+      }
+
+      const body = {
+        message: '更新订阅文件',
+        content,
+        branch: 'main',
+        ...(sha ? { sha } : {})
+      };
+
+      const putRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (putRes.ok) {
+        const url = `https://${owner}.github.io/${repo}/${path}`;
+        status.innerHTML = `✅ 上传成功！<br>订阅链接：<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+
+        showCopyDialog(url);
+      } else {
+        const err = await putRes.json();
+        status.textContent = '❌ 上传失败：' + (err.message || '未知错误');
+      }
+    } catch (e) {
+      status.textContent = '❌ 异常：' + e.message;
+    }
+  }
+
+  // 复制重命名结果到剪贴板
+  function copyOutput() {
+    const text = document.getElementById("renamedNodes").value;
+    if (!text) {
+      alert('没有重命名后的内容可复制');
+      return;
+    }
+    navigator.clipboard.writeText(text).then(() => {
+      alert("结果已复制到剪贴板！");
+    }, () => {
+      alert("复制失败，请手动复制");
+    });
+  }
+
+  // 上传成功弹窗
+  function showCopyDialog(url) {
+    const dialog = document.createElement('div');
+    dialog.style.position = 'fixed';
+    dialog.style.top = '50%';
+    dialog.style.left = '50%';
+    dialog.style.transform = 'translate(-50%, -50%)';
+    dialog.style.background = '#fff';
+    dialog.style.color = '#000';
+    dialog.style.padding = '20px';
+    dialog.style.borderRadius = '8px';
+    dialog.style.boxShadow = '0 0 10px rgba(0,0,0,0.3)';
+    dialog.style.zIndex = '9999';
+    dialog.innerHTML = `
+      <p style="font-weight: bold; margin-bottom: 10px;">✅ 上传成功，请复制订阅链接：</p>
+      <input type="text" readonly value="${url}" style="width: 100%; padding: 8px; border: 1px solid #ccc; margin-bottom: 10px;" />
+      <button id="copyBtn" style="padding: 6px 12px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor:pointer;">一键复制</button>
+      <button id="closeBtn" style="margin-left: 10px; padding: 6px 12px; background: #ccc; border: none; border-radius: 4px; cursor:pointer;">关闭</button>
+    `;
+    document.body.appendChild(dialog);
+
+    document.getElementById('copyBtn').onclick = () => {
+      navigator.clipboard.writeText(url).then(() => {
+        alert('已复制到剪贴板！');
+      }, () => {
+        alert('复制失败，请手动复制');
+      });
+    };
+    document.getElementById('closeBtn').onclick = () => {
+      dialog.remove();
+    };
+  }
+
+  // 页面加载完后，填充文件选择项
+  window.onload = function() {
+    const sel = document.getElementById('fileSelect');
+    for (let i = 553388369; i <= 553388468; i++) {
+      const opt = document.createElement('option');
+      opt.value = `${i}.txt`;
+      opt.textContent = `${i}.txt`;
+      sel.appendChild(opt);
+    }
+  };
+</script>
+</body>
+</html>
