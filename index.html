@@ -1,257 +1,191 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>订阅解码・重命名・上传工具</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Verdana, sans-serif;
-      background: linear-gradient(135deg, #e0f7fa, #80deea);
-      color: #333;
-      margin: 0;
-      padding: 20px;
-      min-height: 100vh;
-      display: flex; flex-direction: column; align-items: center;
-    }
-    h2 {
-      font-weight: 700; font-size: 2.2rem; text-align: center; margin-bottom: 10px;
-      color: #0277bd;
-    }
-    label {
-      width: 100%; max-width: 800px;
-      font-weight: 600; margin-bottom: 5px;
-    }
-    input, select, textarea, button {
-      width: 100%; max-width: 800px;
-      padding: 10px 15px;
-      font-size: 1rem;
-      border: none; border-radius: 8px;
-      box-sizing: border-box;
-      margin-bottom: 15px;
-    }
-    input, select, textarea {
-      background: #ffffff;
-      color: #333;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    }
-    textarea {
-      height: 200px;
-      font-family: monospace;
-      resize: vertical;
-    }
-    textarea:focus, input:focus, select:focus {
-      outline: none;
-      box-shadow: 0 0 0 3px rgba(0,150,136,0.3);
-    }
-    .button-row {
-      display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
-    }
-    button {
-      background: #0288d1;
-      color: #fff;
-      font-weight: 600;
-      cursor: pointer;
-      padding: 12px 20px;
-      transition: background 0.3s ease;
-      min-height: 40px;
-    }
-    button:hover {
-      background: #0277bd;
-    }
-    #status {
-      max-width: 800px;
-      min-height: 24px;
-      text-align: center;
-      color: #d84315;
-      font-weight: 600;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>订阅工具 - 解析+重命名+上传</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f8f9fa; color: #333; padding: 20px; }
+  h2 { text-align: center; color: #4a90e2; }
+  textarea { width: 100%; height: 150px; margin: 10px 0; padding: 8px; font-family: monospace; border: 1px solid #ccc; border-radius: 8px; }
+  button { padding: 8px 16px; font-size: 15px; border: none; background: #4a90e2; color: white; border-radius: 6px; cursor: pointer; margin:5px; }
+  button:hover { background: #357ab8; }
+  select, input[type="text"] { padding: 6px; margin:5px; border:1px solid #ccc; border-radius:6px; }
+</style>
 </head>
 <body>
-  <h2>订阅解码・重命名・上传工具</h2>
+<h2>订阅工具 - 解析 / 重命名 / 上传</h2>
 
-  <!-- 步骤 1：输入订阅 -->
-  <label>步骤1：输入订阅链接 或 粘贴内容（支持Base64解码）</label>
-  <input id="subInput" placeholder="https://example.com/sub 或 粘贴订阅内容" />
+<label>订阅链接：</label><br/>
+<input type="text" id="subUrl" style="width:90%" placeholder="https://..."><br/>
+<button onclick="decodeLocal()">本地解析</button>
+<button onclick="decodeWorker()">Worker解析</button>
 
-  <!-- 解码按钮 -->
-  <div class="button-row">
-    <button onclick="decodeWithWorker()">用 Worker 解码</button>
-    <button onclick="decodeDirect()">本地直连解码</button>
-  </div>
+<label>解析后明文节点：</label>
+<textarea id="rawNodes"></textarea>
 
-  <label>解码结果</label>
-  <textarea id="decodedArea" readonly placeholder="解码后的节点将在这里显示"></textarea>
+<button onclick="renameNodes()">重命名</button>
 
-  <!-- 步骤2：重命名 -->
-  <button onclick="renameNodes()">步骤2：批量重命名节点</button>
-  <label>重命名结果</label>
-  <textarea id="renamedArea" readonly placeholder="重命名后的节点将在这里显示"></textarea>
+<label>重命名后节点：</label>
+<textarea id="renamedNodes"></textarea>
 
-  <!-- 步骤3：上传配置 -->
-  <label>步骤3：填写 GitHub Token</label>
-  <input id="tokenInput" placeholder="GitHub Token" />
+<label>GitHub Token：</label><br/>
+<input type="text" id="token" style="width:90%" placeholder="你的 GitHub Token"><br/>
 
-  <label>选择上传目标文件夹（1–100）</label>
-  <select id="folderSelect"></select>
+<label>选择要上传的 txt 文件：</label>
+<select id="targetFile">
+  <option value="01.txt">01.txt</option>
+  <option value="02.txt">02.txt</option>
+  <option value="03.txt">03.txt</option>
+  <option value="04.txt">04.txt</option>
+  <option value="05.txt">05.txt</option>
+  <option value="06.txt">06.txt</option>
+  <option value="07.txt">07.txt</option>
+  <option value="08.txt">08.txt</option>
+  <option value="09.txt">09.txt</option>
+  <option value="10.txt">10.txt</option>
+</select>
+<button onclick="uploadToGitHub()">上传到GitHub</button>
 
-  <div class="button-row">
-    <button onclick="uploadToGitHub()">步骤4：上传到 GitHub</button>
-  </div>
+<script>
+const workerUrl = "https://proxy-worker.kizoc369.workers.dev/";
+const userName = "Kizoc";
+const repoName = "sss";
 
-  <div id="status"></div>
+async function decodeLocal() {
+  try {
+    const url = document.getElementById('subUrl').value.trim();
+    if (!url) return alert('请输入订阅链接');
+    const res = await fetch(url);
+    const txt = await res.text();
+    const decoded = atob(txt.replace(/\s/g,''));
+    showDecoded(decoded);
+  } catch(e) {
+    alert('本地解析失败：'+e);
+  }
+}
 
-  <script>
-    // 准备folderSelect
-    const sel = document.getElementById('folderSelect');
-    for(let i=1;i<=100;i++){
-      let o = document.createElement('option');
-      o.value = `${i}.txt`;
-      o.text = `${i}.txt`;
-      sel.add(o);
-    }
+async function decodeWorker() {
+  try {
+    const url = document.getElementById('subUrl').value.trim();
+    if (!url) return alert('请输入订阅链接');
+    const res = await fetch(workerUrl+"?url="+encodeURIComponent(url));
+    const txt = await res.text();
+    const decoded = atob(txt.replace(/\s/g,''));
+    showDecoded(decoded);
+  } catch(e) {
+    alert('通过 Worker 获取订阅异常：'+e);
+  }
+}
 
-    // 国家列表（简化）
-    const allCountries = [/* ...你的国家列表... */];
+function showDecoded(text) {
+  const lines = text.split('\n').filter(l=>!l.startsWith('hy2'));
+  document.getElementById('rawNodes').value = lines.join('\n');
+}
 
-    function extractCountry(text){
-      for(const c of allCountries){
-        if(text.includes(c)) return c;
+function renameNodes() {
+  const input = document.getElementById('rawNodes').value.trim();
+  if (!input) return alert('请先解析订阅');
+  const lines = input.split('\n');
+  const countryKeywords = [
+    {key: ['🇭🇰','香港','hongkong','hk'], name:'香港'},
+    {key: ['🇹🇼','台湾','taiwan','tw'], name:'台湾'},
+    {key: ['🇨🇳','中国','china','cn'], name:'中国'},
+    {key: ['🇸🇬','新加坡','singapore','sg'], name:'新加坡'},
+    {key: ['🇯🇵','日本','japan','jp'], name:'日本'},
+    {key: ['🇺🇸','美国','us','usa','unitedstates'], name:'美国'},
+    {key: ['🇬🇧','英国','uk','unitedkingdom'], name:'英国'},
+    {key: ['🇩🇪','德国','germany','de'], name:'德国'},
+    {key: ['🇰🇷','韩国','korea','kr'], name:'韩国'},
+    {key: ['🇫🇷','法国','france','fr'], name:'法国'},
+    {key: ['🇦🇺','澳大利亚','australia','au'], name:'澳大利亚'},
+    {key: ['🇷🇺','俄罗斯','russia','ru'], name:'俄罗斯'},
+    {key: ['🇨🇦','加拿大','canada','ca'], name:'加拿大'},
+    {key: ['🇹🇭','泰国','thailand','th'], name:'泰国'},
+    {key: ['🇵🇭','菲律宾','philippines','ph'], name:'菲律宾'},
+    {key: ['🇧🇷','巴西','brazil','br'], name:'巴西'},
+    {key: ['🇮🇳','印度','india','in'], name:'印度'},
+    {key: ['🇲🇾','马来西亚','malaysia','my'], name:'马来西亚'},
+  ];
+  const renamed=[], unknown=[];
+  lines.forEach(line=>{
+    let lower=decodeURIComponent(line).toLowerCase();
+    let found=false;
+    for(let c of countryKeywords){
+      if(c.key.some(k=>lower.includes(k))){
+        renamed.push(line.replace(/#(.*)?$/,'#无敌｜高速｜'+c.name));
+        found=true; break;
       }
-      return null;
     }
-    function formatRemark(country, order){
-      return country ? `帅比｜高速｜${country}` : `无法识别-${order}｜帅比｜高速`;
-    }
+    if(!found) unknown.push(line.replace(/#(.*)?$/,'#无敌｜高速｜无法识别'));
+  });
+  document.getElementById('renamedNodes').value=renamed.concat(unknown).join('\n');
+}
 
-    // Worker解码
-    async function decodeWithWorker(){
-      const url = subInput.value.trim();
-      status.textContent = "";
-      if(!url){ alert("请输入内容"); return; }
-      decodedArea.value = "请求中...";
-      try {
-        const proxy = 'https://proxy-worker.kizoc369.workers.dev/?url=';
-        const r = await fetch(proxy + encodeURIComponent(url));
-        if(!r.ok) throw new Error(r.status);
-        const t = await r.text();
-        try {
-          decodedArea.value = atob(t.trim());
-          status.textContent = "✔ Worker + Base64 解码成功";
-        }catch{
-          decodedArea.value = t;
-          status.textContent = "✔ Worker 解码成功（非Base64）";
+async function uploadToGitHub(){
+  const token=document.getElementById('token').value.trim();
+  const content=document.getElementById('renamedNodes').value.trim();
+  const file=document.getElementById('targetFile').value;
+  if(!token) return alert('请填写GitHub Token');
+  if(!content) return alert('没有内容可上传');
+  try{
+    let res1=await fetch(`https://api.github.com/repos/${userName}/${repoName}/contents/${file}`);
+    let json1=await res1.json();
+    let sha=json1.sha;
+    let res2=await fetch(`https://api.github.com/repos/${userName}/${repoName}/contents/${file}`,{
+      method:"PUT",
+      headers:{'Content-Type':'application/json','Authorization':'token '+token},
+      body:JSON.stringify({
+        message:"update by tool",
+        content: btoa(unescape(encodeURIComponent(content))),
+        sha
+      })
+    });
+    let json2=await res2.json();
+    if(json2.content){
+      const link=`https://raw.githubusercontent.com/${userName}/${repoName}/main/${file}`;
+      copyToClipboard(link);
+      alert('上传成功，链接已复制：\n'+link);
+    }else{
+      if(json2.message && json2.message.includes('does not match')){
+        res1=await fetch(`https://api.github.com/repos/${userName}/${repoName}/contents/${file}`);
+        json1=await res1.json();
+        sha=json1.sha;
+        res2=await fetch(`https://api.github.com/repos/${userName}/${repoName}/contents/${file}`,{
+          method:"PUT",
+          headers:{'Content-Type':'application/json','Authorization':'token '+token},
+          body:JSON.stringify({
+            message:"retry update by tool",
+            content: btoa(unescape(encodeURIComponent(content))),
+            sha
+          })
+        });
+        json2=await res2.json();
+        if(json2.content){
+          const link=`https://raw.githubusercontent.com/${userName}/${repoName}/main/${file}`;
+          copyToClipboard(link);
+          alert('上传成功（重试），链接已复制：\n'+link);
+        }else{
+          throw json2;
         }
-      } catch(e){
-        status.textContent = "✖ 解码失败：" + e.message;
+      }else{
+        throw json2;
       }
     }
-    async function decodeDirect(){
-      const url = subInput.value.trim();
-      status.textContent = "";
-      if(!url){ alert("请输入内容"); return; }
-      decodedArea.value = "请求中...";
-      try {
-        const r = await fetch(url);
-        if(!r.ok) throw new Error(r.status);
-        const t = await r.text();
-        try {
-          decodedArea.value = atob(t.trim());
-          status.textContent = "✔ 直连 + Base64 解码成功";
-        }catch{
-          decodedArea.value = t;
-          status.textContent = "✔ 直连解码成功（非Base64）";
-        }
-      } catch(e){
-        status.textContent = "✖ 解码失败：" + e.message;
-      }
-    }
+  }catch(e){
+    alert('上传失败：'+JSON.stringify(e));
+  }
+}
 
-    // 重命名逻辑
-    function renameNodes(){
-      const arr = decodedArea.value.trim().split('\n').filter(l=>l.trim());
-      let order=1;
-      const known=[], unknown=[];
-      arr.forEach(line=>{
-        let country=null, outLine=line;
-        try {
-          if(line.startsWith('vmess://')){
-            const obj=JSON.parse(atob(line.slice(8)))
-            country = extractCountry(obj.ps||"");
-            obj.ps=formatRemark(country,order);
-            outLine='vmess://'+btoa(JSON.stringify(obj));
-          } else {
-            const m = line.match(/^(\w+):\/\/([^#]+)(?:#(.*))?/)
-            if(m){
-              const pr = m[1], rest = m[2], rm = decodeURIComponent(m[3]||"");
-              country=extractCountry(rm);
-              outLine = pr+'://'+rest+'#'+encodeURIComponent(formatRemark(country,order));
-            }
-          }
-        } catch{ }
-        country ? known.push(outLine) : unknown.push(outLine);
-        order++;
-      });
-      renamedArea.value = known.concat(unknown).join('\n');
-      status.textContent = `✔ 重命名完成：共 ${arr.length} 条，未知国家 ${unknown.length} 条`;
-    }
-
-    // 获取 GitHub 用户名
-    async function getUser(token){
-      try{
-        const r=await fetch('https://api.github.com/user',{headers:{Authorization:'token '+token}});
-        if(!r.ok) throw '';
-        return (await r.json()).login;
-      }catch{return null;}
-    }
-
-    // 上传
-    async function uploadToGitHub(){
-      const tkn = tokenInput.value.trim();
-      const data = renamedArea.value.trim();
-      const folder = folderSelect.value;
-      status.textContent = "";
-      if(!tkn){ alert("请输入 Token"); return; }
-      if(!data){ alert("请先重命名"); return; }
-      status.textContent = "上传中...";
-
-      const user = await getUser(tkn);
-      if(!user){ status.textContent="✖ 无效 Token"; return; }
-
-      const path = `${folder}/index.html`;
-      const content = btoa(unescape(encodeURIComponent(data)));
-      let sha = null;
-
-      try{
-        const r=await fetch(`https://api.github.com/repos/${user}/sss/contents/${path}`,
-          {headers:{Authorization:`token ${tkn}`}});
-        if(r.ok) sha=(await r.json()).sha;
-        else if(r.status!==404){ throw r.status; }
-      }catch(e){
-        status.textContent = "✖ 获取文件信息失败";
-        return;
-      }
-
-      const body={message:"自动上传节点",content,branch:"main"};
-      if(sha) body.sha=sha;
-
-      try{
-        const r=await fetch(`https://api.github.com/repos/${user}/sss/contents/${path}`,
-          {
-            method:'PUT',
-            headers:{Authorization:`token ${tkn}`, 'Content-Type':'application/json'},
-            body:JSON.stringify(body)
-          });
-        if(r.ok){
-          status.textContent = "✔ 上传成功！路径：" + `https://${user}.github.io/sss/${folder}/`;
-        } else {
-          status.textContent = "✖ 上传失败：" + ((await r.json()).message);
-        }
-      }catch(e){
-        status.textContent = "✖ 上传异常：" + e.message;
-      }
-    }
-  </script>
+function copyToClipboard(text){
+  const tmp=document.createElement('textarea');
+  tmp.value=text;
+  document.body.appendChild(tmp);
+  tmp.select();
+  document.execCommand('copy');
+  document.body.removeChild(tmp);
+}
+</script>
 </body>
 </html>
+
